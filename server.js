@@ -39,7 +39,9 @@ app.listen(PORT, "0.0.0.0", () => console.log(`Server in esecuzione su porta ${P
 
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
+        console.log("Ricevuta richiesta per session ID:", req.params.sessionId);
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+        console.log("Dati sessione ricevuti:", session);
         res.json(session);
     } catch (error) {
         console.error("Errore nel recupero della sessione:", error);
