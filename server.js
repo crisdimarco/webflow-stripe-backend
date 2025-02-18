@@ -48,4 +48,25 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    let event;
+
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error("⚠️ Webhook signature verification failed.", err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+        console.log("💰 Pagamento completato per:", session.id);
+        
+        // Qui puoi aggiornare il database o inviare una notifica
+    }
+
+    res.json({ received: true });
+});
+
 
