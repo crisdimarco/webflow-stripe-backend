@@ -10,9 +10,11 @@ app.use(cors());
 
 app.post("/create-checkout-session", async (req, res) => {
     try {
+        const { items, orderNumber, pickupDate, pickupTime } = req.body;
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
-            line_items: req.body.items.map(item => ({
+            line_items: items.map(item => ({
                 price_data: {
                     currency: "eur",
                     product_data: { name: item.name },
@@ -21,15 +23,18 @@ app.post("/create-checkout-session", async (req, res) => {
                 quantity: item.quantity,
             })),
             mode: "payment",
+            metadata: {
+                orderNumber: orderNumber,
+                pickupDate: pickupDate,
+                pickupTime: pickupTime,
+                items: JSON.stringify(items) // Convertiamo in stringa
+            },
             success_url: "https://gran-bar.webflow.io/success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://gran-bar.webflow.io/cancel",
         });
 
-        // 🔹 Qui restituiamo l'URL di pagamento di Stripe
-        res.json({ id: session.id, url: session.url });
-
+        res.json({ url: session.url });
     } catch (error) {
-        console.error("Errore nella creazione della sessione:", error);
         res.status(500).json({ error: error.message });
     }
 });
