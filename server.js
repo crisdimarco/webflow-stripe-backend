@@ -8,6 +8,27 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const fetch = require("node-fetch");
+
+app.post("/send-to-zapier", async (req, res) => {
+    try {
+        const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
+
+        const response = await fetch(zapierWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(req.body),
+        });
+
+        const result = await response.text();
+        res.json({ success: true, response: result });
+    } catch (error) {
+        console.error("Errore nell'invio dei dati a Zapier:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 app.post("/create-checkout-session", async (req, res) => {
     try {
         const { items, orderNumber, pickupDate, pickupTime } = req.body;
