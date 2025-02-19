@@ -37,6 +37,7 @@ app.post("/send-to-zapier", async (req, res) => {
 
 
 app.post("/create-checkout-session", async (req, res) => {
+    console.log("Dati ricevuti dal frontend:", req.body);
     try {
         const { items, orderNumber, pickupDate, pickupTime } = req.body;
 
