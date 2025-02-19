@@ -7,6 +7,10 @@ const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
+app.get("/", (req, res) => {
+    res.send("✅ Il server è attivo su Render!");
+});
+
 app.use(express.json());
 app.use(cors());
 
