@@ -5,14 +5,15 @@ import dotenv from "dotenv";
 import Stripe from "stripe";
 
 dotenv.config();
-
-const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const app = express();
 
 app.use(express.json());
 app.use(cors());
 
-// ✅ Test del server
+const PORT = process.env.PORT || 10000;
+
+// ✅ TEST: Route per verificare se il server risponde
 app.get("/", (req, res) => {
     res.send("✅ Il server è attivo su Render!");
 });
@@ -21,11 +22,11 @@ app.get("/test", (req, res) => {
     res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
 });
 
-// ✅ Creazione della sessione di pagamento con Stripe
+// ✅ CREA SESSIONE STRIPE (senza nome ed email dal frontend)
 app.post("/create-checkout-session", async (req, res) => {
-    console.log("🛒 Dati ricevuti dal frontend:", req.body);
+    console.log("Dati ricevuti dal frontend:", req.body);
     try {
-        const { items, orderNumber, pickupDate, pickupTime, customerName, customerEmail } = req.body;
+        const { items, orderNumber, pickupDate, pickupTime } = req.body;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
@@ -42,9 +43,7 @@ app.post("/create-checkout-session", async (req, res) => {
                 orderNumber: orderNumber,
                 pickupDate: pickupDate,
                 pickupTime: pickupTime,
-                customerName: customerName,
-                customerEmail: customerEmail,
-                items: JSON.stringify(items)
+                items: JSON.stringify(items),
             },
             success_url: "https://gran-bar.webflow.io/success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://gran-bar.webflow.io/cancel",
@@ -52,16 +51,46 @@ app.post("/create-checkout-session", async (req, res) => {
 
         res.json({ url: session.url });
     } catch (error) {
-        console.error("❌ Errore nella creazione della sessione Stripe:", error);
+        console.error("❌ Errore nella creazione della sessione:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// ✅ Recupero della sessione di pagamento
+// ✅ RECUPERA I DETTAGLI DELLA SESSIONE DOPO IL PAGAMENTO
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+        
         console.log("💳 Dati della sessione di pagamento:", session);
+
+        // ✅ Prendiamo nome ed email direttamente da Stripe
+        const customerName = session.customer_details?.name || "Nome non disponibile";
+        const customerEmail = session.customer_details?.email || "Email non disponibile";
+
+        // ✅ Creiamo un oggetto con i dati da inviare a Zapier
+        const orderData = {
+            orderNumber: session.metadata.orderNumber,
+            customerName: customerName,
+            customerEmail: customerEmail,
+            amountPaid: (session.amount_total / 100).toFixed(2), // Converti centesimi in euro
+            pickupDate: session.metadata.pickupDate,
+            pickupTime: session.metadata.pickupTime,
+            items: session.metadata.items,
+        };
+
+        console.log("📦 Dati da inviare a Zapier:", orderData);
+
+        // ✅ Inviamo i dati a Zapier
+        const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
+        const zapierResponse = await fetch(zapierWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(orderData),
+        });
+
+        const zapierResult = await zapierResponse.text();
+        console.log("🚀 Risposta di Zapier:", zapierResult);
+
         res.json(session);
     } catch (error) {
         console.error("❌ Errore nel recupero della sessione:", error);
@@ -69,49 +98,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
     }
 });
 
-// ✅ Invio dei dati a Zapier
-app.post("/send-to-zapier", async (req, res) => {
-    try {
-        console.log("📦 Dati ricevuti dal frontend per Zapier:", req.body);
-
-        const { orderNumber, pickupDate, pickupTime, amountPaid, items } = req.body;
-
-        // Recupera il nome dal metadata
-        const customerName = req.body.customerName || req.body.metadata?.customerName || "Sconosciuto";
-        const customerEmail = req.body.customerEmail || req.body.metadata?.customerEmail || "Sconosciuto";
-
-        const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
-
-        const payload = {
-            orderNumber,
-            customerName,
-            customerEmail,
-            amountPaid,
-            pickupDate,
-            pickupTime,
-            items,
-        };
-
-        console.log("🚀 Dati inviati a Zapier:", payload);
-
-        const response = await fetch(zapierWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-
-        const result = await response.text();
-        console.log("✅ Risposta di Zapier:", result);
-        res.json({ success: true, response: result });
-    } catch (error) {
-        console.error("❌ Errore nell'invio dei dati a Zapier:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// ✅ Avvio del server su Render
-const PORT = process.env.PORT || 10000;
+// ✅ AVVIO DEL SERVER
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`✅ Il server è avviato e in ascolto sulla porta: ${PORT}`);
+    console.log(`✅ Server in esecuzione su porta ${PORT}`);
 });
