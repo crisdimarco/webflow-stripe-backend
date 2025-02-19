@@ -1,3 +1,4 @@
+import fetch from "node-fetch";
 require("dotenv").config();
 console.log("Stripe Secret Key:", process.env.STRIPE_SECRET_KEY);
 const express = require("express");
