@@ -1,6 +1,9 @@
 app.get("/", (req, res) => {
     res.send("✅ Il server è attivo su Render!");
 });
+app.get("/test", (req, res) => {
+    res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
+});
 import fetch from "node-fetch";
 require("dotenv").config();
 console.log("✅ Il server è avviato e in ascolto sulla porta:", process.env.PORT || 3000);
