@@ -74,16 +74,22 @@ app.post("/send-to-zapier", async (req, res) => {
     try {
         console.log("📦 Dati ricevuti dal frontend per Zapier:", req.body);
 
+        const { orderNumber, pickupDate, pickupTime, amountPaid, items } = req.body;
+
+        // Recupera il nome dal metadata
+        const customerName = req.body.customerName || req.body.metadata?.customerName || "Sconosciuto";
+        const customerEmail = req.body.customerEmail || req.body.metadata?.customerEmail || "Sconosciuto";
+
         const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
 
         const payload = {
-            orderNumber: req.body.orderNumber,
-            customerName: req.body.customerName, // ✅ Nome del cliente
-            customerEmail: req.body.customerEmail,
-            amountPaid: req.body.amountPaid,
-            pickupDate: req.body.pickupDate,
-            pickupTime: req.body.pickupTime,
-            items: req.body.items
+            orderNumber,
+            customerName,
+            customerEmail,
+            amountPaid,
+            pickupDate,
+            pickupTime,
+            items,
         };
 
         console.log("🚀 Dati inviati a Zapier:", payload);
@@ -96,13 +102,13 @@ app.post("/send-to-zapier", async (req, res) => {
 
         const result = await response.text();
         console.log("✅ Risposta di Zapier:", result);
-
         res.json({ success: true, response: result });
     } catch (error) {
-        console.error("❌ Errore nell'invio a Zapier:", error);
+        console.error("❌ Errore nell'invio dei dati a Zapier:", error);
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ✅ Avvio del server su Render
 const PORT = process.env.PORT || 10000;
