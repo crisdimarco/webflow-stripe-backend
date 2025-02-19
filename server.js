@@ -8,7 +8,8 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const fetch = require("node-fetch");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
 
 app.post("/send-to-zapier", async (req, res) => {
     try {
