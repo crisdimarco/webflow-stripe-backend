@@ -88,8 +88,5 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-app.get("/test", (req, res) => {
-    console.log("✅ Route /test chiamata con successo!");
-    res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
-});
+
 
