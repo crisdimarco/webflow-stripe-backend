@@ -1,28 +1,27 @@
-app.get("/", (req, res) => {
-    res.send("✅ Il server è attivo su Render!");
-});
-app.get("/test", (req, res) => {
-    res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
-});
-import fetch from "node-fetch";
 require("dotenv").config();
-console.log("✅ Il server è avviato e in ascolto sulla porta:", process.env.PORT || 3000);
-console.log("Stripe Secret Key:", process.env.STRIPE_SECRET_KEY);
 const express = require("express");
 const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const fetch = require("node-fetch"); // Importazione corretta
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
 
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// Endpoint di test
+app.get("/", (req, res) => {
+    res.send("✅ Il server è attivo su Render!");
+});
 
+app.get("/test", (req, res) => {
+    res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
+});
 
+// Endpoint per inviare dati a Zapier
 app.post("/send-to-zapier", async (req, res) => {
     try {
-        console.log("Dati ricevuti dal frontend:", req.body); // 👈 Logga i dati ricevuti
+        console.log("Dati ricevuti dal frontend:", req.body);
 
         const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
 
@@ -33,7 +32,7 @@ app.post("/send-to-zapier", async (req, res) => {
         });
 
         const result = await response.text();
-        console.log("Risposta di Zapier:", result); // 👈 Logga la risposta di Zapier
+        console.log("Risposta di Zapier:", result);
 
         res.json({ success: true, response: result });
     } catch (error) {
@@ -42,12 +41,11 @@ app.post("/send-to-zapier", async (req, res) => {
     }
 });
 
-
-
+// Endpoint per creare una sessione di pagamento con Stripe
 app.post("/create-checkout-session", async (req, res) => {
     console.log("Dati ricevuti dal frontend:", req.body);
     try {
-        const { items, orderNumber, pickupDate, pickupTime } = req.body;
+        const { items, orderNumber, pickupDate, pickupTime, customerName, customerEmail } = req.body;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
@@ -64,7 +62,9 @@ app.post("/create-checkout-session", async (req, res) => {
                 orderNumber: orderNumber,
                 pickupDate: pickupDate,
                 pickupTime: pickupTime,
-                items: JSON.stringify(items) // Convertiamo in stringa
+                customerName: customerName,
+                customerEmail: customerEmail,
+                items: JSON.stringify(items)
             },
             success_url: "https://gran-bar.webflow.io/success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://gran-bar.webflow.io/cancel",
@@ -76,9 +76,7 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => console.log(`Server in esecuzione su porta ${PORT}`));
-
+// Endpoint per recuperare una sessione di pagamento
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
@@ -89,4 +87,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
     }
 });
 
-
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ Server in esecuzione su porta ${PORT}`);
+});
