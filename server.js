@@ -1,3 +1,6 @@
+app.get("/", (req, res) => {
+    res.send("✅ Il server è attivo su Render!");
+});
 import fetch from "node-fetch";
 require("dotenv").config();
 console.log("✅ Il server è avviato e in ascolto sulla porta:", process.env.PORT || 3000);
@@ -7,9 +10,6 @@ const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
-app.get("/", (req, res) => {
-    res.send("✅ Il server è attivo su Render!");
-});
 
 app.use(express.json());
 app.use(cors());
