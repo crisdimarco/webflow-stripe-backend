@@ -68,7 +68,14 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         const customerEmail = session.customer_details?.email || "Email non disponibile";
 
         // ✅ Convertiamo gli articoli in formato array
-        const items = JSON.parse(session.metadata.items);
+        let items = [];
+        try {
+            items = JSON.parse(session.metadata.items);
+        } catch (error) {
+            console.error("❌ Errore nel parsing degli articoli:", error);
+        }
+
+        console.log("📦 Articoli decodificati:", items);
 
         // ✅ Invia ogni prodotto come una richiesta separata a Zapier
         const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
@@ -81,9 +88,9 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 amountPaid: (session.amount_total / 100).toFixed(2),
                 pickupDate: session.metadata.pickupDate,
                 pickupTime: session.metadata.pickupTime,
-                productName: item.name,
-                productPrice: item.price,
-                quantity: item.quantity
+                productName: item.name || "Nome prodotto mancante",
+                productPrice: item.price || 0,
+                quantity: item.quantity || 0
             };
 
             console.log("📦 Dati inviati a Zapier:", orderData);
@@ -111,6 +118,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ✅ AVVIO DEL SERVER
 app.listen(PORT, "0.0.0.0", () => {
