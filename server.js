@@ -60,43 +60,49 @@ app.post("/create-checkout-session", async (req, res) => {
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+        
         console.log("💳 Dati della sessione di pagamento:", session);
 
         // ✅ Prendiamo nome ed email direttamente da Stripe
         const customerName = session.customer_details?.name || "Nome non disponibile";
         const customerEmail = session.customer_details?.email || "Email non disponibile";
 
-        // ✅ Formattiamo gli articoli
-        const formattedItems = JSON.parse(session.metadata.items).map(item => ({
-            productName: item.name,
-            productPrice: item.price,
-            quantity: item.quantity
-        }));
+        // ✅ Convertiamo gli articoli in formato array
+        const items = JSON.parse(session.metadata.items);
 
-        // ✅ Creiamo un oggetto con i dati da inviare a Zapier
-        const orderData = {
-            orderNumber: session.metadata.orderNumber,
-            customerName,
-            customerEmail,
-            amountPaid: (session.amount_total / 100).toFixed(2), // Converti centesimi in euro
-            pickupDate: session.metadata.pickupDate,
-            pickupTime: session.metadata.pickupTime,
-            items: formattedItems
-        };
-
-        console.log("📦 Dati da inviare a Zapier:", orderData);
-
-        // ✅ Inviamo i dati a Zapier
+        // ✅ Invia ogni prodotto come una richiesta separata a Zapier
         const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
 
-        const zapierResponse = await fetch(zapierWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(orderData),
-        });
+        for (const item of items) {
+            const orderData = {
+                orderNumber: session.metadata.orderNumber,
+                customerName,
+                customerEmail,
+                amountPaid: (session.amount_total / 100).toFixed(2),
+                pickupDate: session.metadata.pickupDate,
+                pickupTime: session.metadata.pickupTime,
+                productName: item.name,
+                productPrice: item.price,
+                quantity: item.quantity
+            };
 
-        const zapierResult = await zapierResponse.text();
-        console.log("🚀 Risposta di Zapier:", zapierResult);
+            console.log("📦 Dati inviati a Zapier:", orderData);
+
+            // ✅ Invio separato per ogni prodotto
+            try {
+                const zapierResponse = await fetch(zapierWebhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(orderData),
+                });
+
+                const zapierResult = await zapierResponse.text();
+                console.log("🚀 Risposta di Zapier:", zapierResult);
+
+            } catch (error) {
+                console.error("❌ Errore nell'invio dei dati a Zapier:", error);
+            }
+        }
 
         res.json(session);
 
