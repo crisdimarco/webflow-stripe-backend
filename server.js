@@ -67,13 +67,18 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         const customerName = session.customer_details?.name || "Nome non disponibile";
         const customerEmail = session.customer_details?.email || "Email non disponibile";
 
-        // ✅ Convertiamo gli articoli in formato array
-        let items = [];
-        try {
-            items = JSON.parse(session.metadata.items);
-        } catch (error) {
-            console.error("❌ Errore nel parsing degli articoli:", error);
-        }
+        // ✅ Verifica cosa sta arrivando
+console.log("🔍 session.metadata.items:", session.metadata.items);
+
+// ✅ Convertiamo gli articoli in formato array
+let items = [];
+try {
+    items = JSON.parse(session.metadata.items);
+    console.log("✅ Articoli estratti correttamente:", items);
+} catch (error) {
+    console.error("❌ Errore nel parsing degli articoli:", error);
+}
+
 
         console.log("📦 Articoli decodificati:", items);
 
