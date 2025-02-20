@@ -80,44 +80,50 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
 
         console.log("📦 Dati da inviare a Zapier:", orderData);
 
-      
         // ✅ Inviamo i dati a Zapier in formato corretto
-const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
+        const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
 
-try {
-    const formattedItems = JSON.parse(orderData.items).map(item => ({
-        productName: item.name,
-        productPrice: item.price,
-        quantity: item.quantity
-    }));
+        try {
+            const formattedItems = JSON.parse(orderData.items).map(item => ({
+                productName: item.name,
+                productPrice: item.price,
+                quantity: item.quantity
+            }));
 
-    const zapierPayload = {
-        orderNumber: orderData.orderNumber,
-        customerEmail: orderData.customerEmail,
-        amountPaid: orderData.amountPaid,
-        pickupDate: orderData.pickupDate,
-        pickupTime: orderData.pickupTime,
-        items: formattedItems
-    };
+            const zapierPayload = {
+                orderNumber: orderData.orderNumber,
+                customerName: orderData.customerName,
+                customerEmail: orderData.customerEmail,
+                amountPaid: orderData.amountPaid,
+                pickupDate: orderData.pickupDate,
+                pickupTime: orderData.pickupTime,
+                items: formattedItems
+            };
 
-    const zapierResponse = await fetch(zapierWebhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(zapierPayload),
-    });
+            const zapierResponse = await fetch(zapierWebhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(zapierPayload),
+            });
 
-    const zapierResult = await zapierResponse.text();
-    console.log("🚀 Risposta di Zapier:", zapierResult);
+            const zapierResult = await zapierResponse.text();
+            console.log("🚀 Risposta di Zapier:", zapierResult);
 
-    res.json(session);
+            res.json(session);
 
-} catch (error) {
-    console.error("❌ Errore nell'invio dei dati a Zapier:", error);
-    res.status(500).json({ error: error.message });
-}
+        } catch (error) {
+            console.error("❌ Errore nell'invio dei dati a Zapier:", error);
+            res.status(500).json({ error: error.message });
+        }
 
+    } catch (error) {
+        console.error("❌ Errore nel recupero della sessione:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // ✅ AVVIO DEL SERVER
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ Server in esecuzione su porta ${PORT}`);
 });
+
