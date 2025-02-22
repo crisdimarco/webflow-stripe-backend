@@ -14,10 +14,10 @@ const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID; // ID della base di Airtable
-const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME; // Nome della tabella
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;  // <-- Usa solo l'ID della base
+const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME;  // <-- Nome esatto della tabella
 
-const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
 
 const airtableHeaders = {
     "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
@@ -81,33 +81,31 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         console.log("📦 Dati ordine da inviare a Airtable:", orderData);
 
         // 📌 **Invia ogni prodotto come un record su Airtable**
-        for (const item of orderData.items) {
-            const airtablePayload = {
-                fields: {
-                    "Numero Ordine": orderData.orderNumber,
-                    "Nome Cliente": orderData.customerName,
-                    "Email Cliente": orderData.customerEmail,
-                    "Data Ritiro": orderData.pickupDate,
-                    "Ora Ritiro": orderData.pickupTime,
-                    "Nome Prodotto": item.name,
-                    "Quantità": item.quantity,
-                    "Prezzo": item.price.toFixed(2),
-                    "Totale Pagamento": orderData.amountPaid,
-                }
-            };
-
-            const airtableResponse = await fetch(AIRTABLE_URL, {
-                method: "POST",
-                headers: airtableHeaders,
-                body: JSON.stringify({ records: [airtablePayload] }), // Inserisce il record in Airtable
-            });
-
-            const airtableResult = await airtableResponse.json();
-            console.log("📤 Dati inviati a Airtable:", airtableResult);
-
-            if (airtableResult.error) {
-                console.error("❌ Errore nell'invio ad Airtable:", airtableResult.error);
+        const airtableRecords = orderData.items.map(item => ({
+            fields: {
+                "Numero Ordine": orderData.orderNumber,
+                "Nome Cliente": orderData.customerName,
+                "Email Cliente": orderData.customerEmail,
+                "Data Ritiro": orderData.pickupDate,
+                "Ora Ritiro": orderData.pickupTime,
+                "Nome Prodotto": item.name,
+                "Quantità": item.quantity,
+                "Prezzo": item.price.toFixed(2),
+                "Totale Pagamento": orderData.amountPaid,
             }
+        }));
+
+        const airtableResponse = await fetch(AIRTABLE_URL, {
+            method: "POST",
+            headers: airtableHeaders,
+            body: JSON.stringify({ records: airtableRecords }), // Invio multiplo
+        });
+
+        const airtableResult = await airtableResponse.json();
+        console.log("📤 Dati inviati a Airtable:", airtableResult);
+
+        if (airtableResult.error) {
+            console.error("❌ Errore nell'invio ad Airtable:", airtableResult.error);
         }
 
         res.json(session);
