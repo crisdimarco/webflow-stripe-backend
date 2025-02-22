@@ -59,7 +59,9 @@ app.post("/create-checkout-session", async (req, res) => {
 });
 
 // ✅ **Rotta per gestire i Webhook di Stripe**
-app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+import bodyParser from "body-parser";
+
+app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -68,6 +70,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
+        // ✅ **Verifica la firma del webhook con il corpo RAW**
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
 
         console.log("✅ Webhook ricevuto:", event.type);
@@ -125,6 +128,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
         res.status(400).send(`Webhook Error: ${err.message}`);
     }
 });
+
 
 // ✅ **Avvio del server**
 app.listen(PORT, "0.0.0.0", () => {
