@@ -91,7 +91,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 "Orario di Ritiro": String(orderData.pickupTime),
                 "Nome Prodotto": item.name,
                 "Quantità": item.quantity,
-                "Totale Pagamento": orderData.amountPaid,
+                "Totale Pagamento": parseFloat(orderData.amountPaid),
             }
         }));
 
