@@ -14,10 +14,11 @@ const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.appCH6ig8sj0rhYNQ;  // <-- Usa solo l'ID della base
-const AIRTABLE_TABLE_NAME = process.env.tbl6hct9wvRyEtt0S;  // <-- Nome esatto della tabella
+const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // <-- ID della BASE
+const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // <-- ID della TABELLA
 
-const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
+const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
+
 
 const airtableHeaders = {
     "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
