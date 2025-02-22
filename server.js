@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 10000;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ/tbl6hct9wvRyEtt0S/viwUe48Eq2RWBK2jA?blocks=show";  // <-- Sostituisci con il tuo
 const AIRTABLE_TABLE_NAME = "Ordini"; // <-- Sostituisci con il nome della tua tabella
-const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const AIRTABLE_URL = `https://api.airtable.com/v0/${appCH6ig8sj0rhYNQ/tbl6hct9wvRyEtt0S/viwUe48Eq2RWBK2jA?blocks=show}/${Ordini}`;
 
 const airtableHeaders = {
     "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
