@@ -3,25 +3,22 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import Stripe from "stripe";
-import bodyParser from "body-parser"; // ✅ Importa body-parser
+import bodyParser from "body-parser";
 
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
-app.use(cors());
 
-// ✅ Middleware per gestire JSON e webhook
-app.use(express.json());
-app.use(bodyParser.json());
-app.use(bodyParser.raw({ type: "application/json" })); // Per il webhook di Stripe
+// 📌 **Configurazione generale**
+app.use(cors());
+app.use(express.json()); // ✅ Manteniamo JSON parser per tutte le rotte, tranne /webhook
 
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // <-- ID della BASE
-const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // <-- ID della TABELLA
-
+const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // ID della BASE
+const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // ID della TABELLA
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
 const airtableHeaders = {
@@ -120,7 +117,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
     }
 });
 
-// ✅ **Rotta per gestire i Webhook di Stripe**
+// ✅ **Rotta per gestire i Webhook di Stripe** (USA IL RAW BODY!)
 app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -130,6 +127,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
+        // ✅ Passiamo il RAW BODY come Buffer
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
 
         console.log("✅ Webhook ricevuto:", event.type);
