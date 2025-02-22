@@ -91,7 +91,6 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 "Ora Ritiro": orderData.pickupTime,
                 "Nome Prodotto": item.name,
                 "Quantità": item.quantity,
-                "Prezzo": item.price.toFixed(2),
                 "Totale Pagamento": orderData.amountPaid,
             }
         }));
