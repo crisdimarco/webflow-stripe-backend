@@ -88,7 +88,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 "Nome Cliente": orderData.customerName,
                 "Email Cliente": orderData.customerEmail,
                 "Data Ritiro": orderData.pickupDate,
-                "Ora Ritiro": orderData.pickupTime,
+                "Orario di Ritiro": String(orderData.pickupTime),
                 "Nome Prodotto": item.name,
                 "Quantità": item.quantity,
                 "Totale Pagamento": orderData.amountPaid,
