@@ -3,10 +3,18 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import Stripe from "stripe";
+import bodyParser from "body-parser"; // ✅ Importa body-parser
 
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
+app.use(cors());
+
+// ✅ Middleware per gestire JSON e webhook
+app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.raw({ type: "application/json" })); // Per il webhook di Stripe
+
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
@@ -20,18 +28,6 @@ const airtableHeaders = {
     "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
     "Content-Type": "application/json",
 };
-
-// 📌 **Middleware**
-app.use(cors());
-// ✅ Express usa JSON per tutto tranne i Webhook
-app.use((req, res, next) => {
-    if (req.originalUrl === "/webhook") {
-        next(); // Ignora il parsing JSON per i Webhook
-    } else {
-        express.json()(req, res, next);
-    }
-});
-
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
@@ -66,11 +62,66 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-// ✅ **Gestione Webhook Stripe**
-import bodyParser from "body-parser";
+// ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
+app.get("/checkout-session/:sessionId", async (req, res) => {
+    try {
+        const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+        console.log("💳 Dati della sessione di pagamento:", session);
 
-// ATTENZIONE: SOLO per il Webhook usiamo il formato RAW
-app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+        // 📌 **Prendiamo nome ed email da Stripe**
+        const customerName = session.customer_details?.name || "Nome non disponibile";
+        const customerEmail = session.customer_details?.email || "Email non disponibile";
+
+        // 📌 **Estrarre i dati della sessione**
+        const orderData = {
+            orderNumber: session.metadata.orderNumber,
+            customerName,
+            customerEmail,
+            amountPaid: (session.amount_total / 100).toFixed(2),
+            pickupDate: session.metadata.pickupDate,
+            pickupTime: session.metadata.pickupTime,
+            items: JSON.parse(session.metadata.items),
+        };
+
+        console.log("📦 Dati ordine da inviare a Airtable:", orderData);
+
+        // 📌 **Invia ogni prodotto come un record su Airtable**
+        const airtableRecords = orderData.items.map(item => ({
+            fields: {
+                "Numero Ordine": orderData.orderNumber,
+                "Nome Cliente": orderData.customerName,
+                "Email Cliente": orderData.customerEmail,
+                "Data Ritiro": orderData.pickupDate,
+                "Orario di Ritiro": String(orderData.pickupTime),
+                "Nome Prodotto": item.name,
+                "Quantità": item.quantity,
+                "Totale Pagamento": parseFloat(orderData.amountPaid),
+            }
+        }));
+
+        const airtableResponse = await fetch(AIRTABLE_URL, {
+            method: "POST",
+            headers: airtableHeaders,
+            body: JSON.stringify({ records: airtableRecords }), // Invio multiplo
+        });
+
+        const airtableResult = await airtableResponse.json();
+        console.log("📤 Dati inviati a Airtable:", airtableResult);
+
+        if (airtableResult.error) {
+            console.error("❌ Errore nell'invio ad Airtable:", airtableResult.error);
+        }
+
+        res.json(session);
+
+    } catch (error) {
+        console.error("❌ Errore nel recupero della sessione o invio a Airtable:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ **Rotta per gestire i Webhook di Stripe**
+app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -79,7 +130,6 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
-        // ✅ **Verifica della firma usando il corpo RAW**
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
 
         console.log("✅ Webhook ricevuto:", event.type);
@@ -87,7 +137,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
         if (event.type === "checkout.session.completed") {
             const session = event.data.object;
 
-            // 📌 **Recuperiamo i dati dell'ordine**
+            // 📌 **Prendi i dati dalla sessione**
             const customerName = session.customer_details?.name || "Nome non disponibile";
             const customerEmail = session.customer_details?.email || "Email non disponibile";
 
@@ -103,7 +153,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
 
             console.log("📦 Dati ordine da inviare a Airtable via Webhook:", orderData);
 
-            // 📌 **Invia ogni prodotto come un record su Airtable**
+            // 📌 **Invia i dati ad Airtable**
             const airtableRecords = orderData.items.map(item => ({
                 fields: {
                     "Numero Ordine": orderData.orderNumber,
@@ -137,7 +187,6 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
         res.status(400).send(`Webhook Error: ${err.message}`);
     }
 });
-
 
 // ✅ **Avvio del server**
 app.listen(PORT, "0.0.0.0", () => {
