@@ -7,9 +7,6 @@ import Stripe from "stripe";
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
-app.use(express.json());
-app.use(cors());
-
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
@@ -23,6 +20,10 @@ const airtableHeaders = {
     "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
     "Content-Type": "application/json",
 };
+
+// 📌 **Middleware**
+app.use(cors());
+app.use(express.json()); // 👉 Usato per tutte le altre route
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
