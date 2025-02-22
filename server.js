@@ -90,7 +90,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
 });
 
 // ✅ **Rotta per gestire il Webhook Stripe**
-app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
+app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
