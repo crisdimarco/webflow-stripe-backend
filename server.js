@@ -8,7 +8,13 @@ dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: "https://gran-bar.webflow.io", // Sostituisci con il tuo dominio Webflow
+    methods: "GET,POST,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization",
+    credentials: true
+}));
+
 
 const PORT = process.env.PORT || 10000;
 
@@ -26,8 +32,14 @@ const airtableHeaders = {
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "https://gran-bar.webflow.io");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
     try {
         const { items, orderNumber, pickupDate, pickupTime } = req.body;
+
+        console.log("Dati ricevuti dal frontend:", req.body);
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
@@ -50,12 +62,15 @@ app.post("/create-checkout-session", async (req, res) => {
             cancel_url: "https://gran-bar.webflow.io/cancel",
         });
 
+        console.log("✅ Sessione creata:", session);
         res.json({ url: session.url });
+
     } catch (error) {
-        console.error("❌ Errore nella creazione della sessione:", error);
+        console.error("❌ Errore nella creazione della sessione Stripe:", error);
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
 app.get("/checkout-session/:sessionId", async (req, res) => {
