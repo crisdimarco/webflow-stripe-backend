@@ -11,7 +11,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ **Questa riga è fondamentale per il webhook**
+// ✅ **Questa riga è fondamentale per il webhook
+app.use(bodyParser.json()); // Solo per le altre API
 app.use("/webhook", bodyParser.raw({ type: "application/json" }));
 
 const PORT = process.env.PORT || 10000;
