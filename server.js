@@ -9,18 +9,17 @@ dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(cors());
-app.use(express.json());
 
-// ✅ **Questa riga è fondamentale per il webhook
-app.use(bodyParser.json()); // Solo per le altre API
-app.use("/webhook", bodyParser.raw({ type: "application/json" }));
+// ✅ ATTENZIONE: express.json() NON deve essere usato per il webhook
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // ID della BASE
-const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // ID della TABELLA
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID;
+
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
 const airtableHeaders = {
@@ -61,36 +60,33 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-// ✅ **Rotta per recuperare la sessione Stripe e inviare dati alla pagina success**
+// ✅ **Rotta per recuperare la sessione Stripe per la pagina Success**
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+
         console.log("💳 Dati della sessione di pagamento:", session);
 
-        if (!session.metadata) {
-            console.error("⚠️ Nessun metadata presente nella sessione!");
-            return res.status(500).json({ error: "Dati dell'ordine non trovati!" });
-        }
-
         const orderData = {
-            orderNumber: session.metadata.orderNumber || "N/A",
+            orderNumber: session.metadata.orderNumber,
             customerName: session.customer_details?.name || "Nome non disponibile",
             customerEmail: session.customer_details?.email || "Email non disponibile",
             amountPaid: (session.amount_total / 100).toFixed(2),
-            pickupDate: session.metadata.pickupDate || "N/A",
-            pickupTime: session.metadata.pickupTime || "N/A",
-            items: session.metadata.items ? JSON.parse(session.metadata.items) : [],
+            pickupDate: session.metadata.pickupDate,
+            pickupTime: session.metadata.pickupTime,
+            items: JSON.parse(session.metadata.items),
         };
 
         console.log("📦 Dati ordine da restituire alla pagina success:", orderData);
         res.json(orderData);
+
     } catch (error) {
         console.error("❌ Errore nel recupero della sessione:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// ✅ **Rotta per gestire il Webhook Stripe**
+// ✅ **Rotta per gestire il Webhook di Stripe**
 app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -100,8 +96,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
-        // 🔥 **IMPORTANTE: ora il webhook usa il body RAW**
-        const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+        const event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
         console.log("✅ Webhook ricevuto:", event.type);
 
         if (event.type === "checkout.session.completed") {
@@ -114,19 +109,18 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
                 amountPaid: (session.amount_total / 100).toFixed(2),
                 pickupDate: session.metadata.pickupDate,
                 pickupTime: session.metadata.pickupTime,
-                items: session.metadata.items ? JSON.parse(session.metadata.items) : [],
+                items: JSON.parse(session.metadata.items),
             };
 
             console.log("📦 Dati ordine da inviare a Airtable via Webhook:", orderData);
 
-            // 📌 **Invia i dati ad Airtable**
             const airtableRecords = orderData.items.map(item => ({
                 fields: {
                     "Numero Ordine": orderData.orderNumber,
                     "Nome Cliente": orderData.customerName,
                     "Email Cliente": orderData.customerEmail,
                     "Data Ritiro": orderData.pickupDate,
-                    "Orario di Ritiro": String(orderData.pickupTime),
+                    "Orario di Ritiro": orderData.pickupTime,
                     "Nome Prodotto": item.name,
                     "Quantità": item.quantity,
                     "Totale Pagamento": parseFloat(orderData.amountPaid),
@@ -136,7 +130,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
             const airtableResponse = await fetch(AIRTABLE_URL, {
                 method: "POST",
                 headers: airtableHeaders,
-                body: JSON.stringify({ records: airtableRecords }), // Invio multiplo
+                body: JSON.stringify({ records: airtableRecords }),
             });
 
             const airtableResult = await airtableResponse.json();
