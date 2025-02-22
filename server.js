@@ -10,15 +10,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(bodyParser.raw({ type: "application/json" }));
+
+// ✅ **Questa riga è fondamentale per il webhook**
+app.use("/webhook", bodyParser.raw({ type: "application/json" }));
 
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // <-- ID della BASE
-const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // <-- ID della TABELLA
-
+const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ"; // ID della BASE
+const AIRTABLE_TABLE_ID = "tbl6hct9wvRyEtt0S"; // ID della TABELLA
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
 const airtableHeaders = {
@@ -59,7 +60,7 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-// ✅ **Rotta per recuperare la sessione Stripe e restituire i dati alla pagina success**
+// ✅ **Rotta per recuperare la sessione Stripe e inviare dati alla pagina success**
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
@@ -98,6 +99,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
+        // 🔥 **IMPORTANTE: ora il webhook usa il body RAW**
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
         console.log("✅ Webhook ricevuto:", event.type);
 
