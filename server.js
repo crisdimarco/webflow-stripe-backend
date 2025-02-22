@@ -23,7 +23,15 @@ const airtableHeaders = {
 
 // 📌 **Middleware**
 app.use(cors());
-app.use(express.json()); // 👉 Usato per tutte le altre route
+// ✅ Express usa JSON per tutto tranne i Webhook
+app.use((req, res, next) => {
+    if (req.originalUrl === "/webhook") {
+        next(); // Ignora il parsing JSON per i Webhook
+    } else {
+        express.json()(req, res, next);
+    }
+});
+
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
@@ -58,10 +66,11 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-// ✅ **Rotta per gestire i Webhook di Stripe**
+// ✅ **Gestione Webhook Stripe**
 import bodyParser from "body-parser";
 
-app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
+// ATTENZIONE: SOLO per il Webhook usiamo il formato RAW
+app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -70,7 +79,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
             throw new Error("Firma o segreto del webhook mancanti.");
         }
 
-        // ✅ **Verifica la firma del webhook con il corpo RAW**
+        // ✅ **Verifica della firma usando il corpo RAW**
         const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
 
         console.log("✅ Webhook ricevuto:", event.type);
@@ -78,7 +87,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
         if (event.type === "checkout.session.completed") {
             const session = event.data.object;
 
-            // 📌 **Prendi i dati dalla sessione**
+            // 📌 **Recuperiamo i dati dell'ordine**
             const customerName = session.customer_details?.name || "Nome non disponibile";
             const customerEmail = session.customer_details?.email || "Email non disponibile";
 
@@ -94,7 +103,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
 
             console.log("📦 Dati ordine da inviare a Airtable via Webhook:", orderData);
 
-            // 📌 **Invia i dati ad Airtable**
+            // 📌 **Invia ogni prodotto come un record su Airtable**
             const airtableRecords = orderData.items.map(item => ({
                 fields: {
                     "Numero Ordine": orderData.orderNumber,
