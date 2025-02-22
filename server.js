@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 10000;
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID;
+const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID; 
 
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
@@ -68,13 +68,13 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         console.log("💳 Dati della sessione di pagamento:", session);
 
         const orderData = {
-            orderNumber: session.metadata.orderNumber,
+            orderNumber: session.metadata?.orderNumber || "N/A",
             customerName: session.customer_details?.name || "Nome non disponibile",
             customerEmail: session.customer_details?.email || "Email non disponibile",
             amountPaid: (session.amount_total / 100).toFixed(2),
-            pickupDate: session.metadata.pickupDate,
-            pickupTime: session.metadata.pickupTime,
-            items: JSON.parse(session.metadata.items),
+            pickupDate: session.metadata?.pickupDate || "N/A",
+            pickupTime: session.metadata?.pickupTime || "N/A",
+            items: session.metadata?.items ? JSON.parse(session.metadata.items) : [],
         };
 
         console.log("📦 Dati ordine da restituire alla pagina success:", orderData);
