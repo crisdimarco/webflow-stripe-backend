@@ -7,24 +7,24 @@ import Stripe from "stripe";
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
-
 app.use(express.json());
 app.use(cors());
 
 const PORT = process.env.PORT || 10000;
 
-// ✅ TEST: Route per verificare se il server risponde
-app.get("/", (req, res) => {
-    res.send("✅ Il server è attivo su Render!");
-});
+// 📌 **Airtable Configurazione**
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = "appCH6ig8sj0rhYNQ/tbl6hct9wvRyEtt0S/viwUe48Eq2RWBK2jA?blocks=show";  // <-- Sostituisci con il tuo
+const AIRTABLE_TABLE_NAME = "Ordini"; // <-- Sostituisci con il nome della tua tabella
+const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
 
-app.get("/test", (req, res) => {
-    res.json({ message: "✅ Il server è attivo e risponde correttamente!" });
-});
+const airtableHeaders = {
+    "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
+    "Content-Type": "application/json",
+};
 
-// ✅ CREA SESSIONE STRIPE
+// ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
-    console.log("Dati ricevuti dal frontend:", req.body);
     try {
         const { items, orderNumber, pickupDate, pickupTime } = req.body;
 
@@ -56,76 +56,64 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 });
 
-// ✅ RECUPERA I DETTAGLI DELLA SESSIONE DOPO IL PAGAMENTO
+// ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
-        
         console.log("💳 Dati della sessione di pagamento:", session);
 
-        // ✅ Prendiamo nome ed email direttamente da Stripe
+        // 📌 **Prendiamo nome ed email da Stripe**
         const customerName = session.customer_details?.name || "Nome non disponibile";
         const customerEmail = session.customer_details?.email || "Email non disponibile";
 
-        // ✅ Verifica cosa sta arrivando
-console.log("🔍 session.metadata.items:", session.metadata.items);
+        // 📌 **Estrarre i dati della sessione**
+        const orderData = {
+            orderNumber: session.metadata.orderNumber,
+            customerName: customerName,
+            customerEmail: customerEmail,
+            amountPaid: (session.amount_total / 100).toFixed(2),
+            pickupDate: session.metadata.pickupDate,
+            pickupTime: session.metadata.pickupTime,
+            items: JSON.parse(session.metadata.items),
+        };
 
-// ✅ Convertiamo gli articoli in formato array
-let items = [];
-try {
-    items = JSON.parse(session.metadata.items);
-    console.log("✅ Articoli estratti correttamente:", items);
-} catch (error) {
-    console.error("❌ Errore nel parsing degli articoli:", error);
-}
+        console.log("📦 Dati ordine da inviare a Airtable:", orderData);
 
-
-        console.log("📦 Articoli decodificati:", items);
-
-        // ✅ Invia ogni prodotto come una richiesta separata a Zapier
-        const zapierWebhookUrl = "https://hooks.zapier.com/hooks/catch/9094613/2wlj5gl/";
-
-        for (const item of items) {
-            const orderData = {
-                orderNumber: session.metadata.orderNumber,
-                customerName,
-                customerEmail,
-                amountPaid: (session.amount_total / 100).toFixed(2),
-                pickupDate: session.metadata.pickupDate,
-                pickupTime: session.metadata.pickupTime,
-                productName: item.name || "Nome prodotto mancante",
-                productPrice: item.price || 0,
-                quantity: item.quantity || 0
+        // 📌 **Invia ogni prodotto come un record su Airtable**
+        for (const item of orderData.items) {
+            const airtablePayload = {
+                fields: {
+                    "Numero Ordine": orderData.orderNumber,
+                    "Nome Cliente": orderData.customerName,
+                    "Email Cliente": orderData.customerEmail,
+                    "Data Ritiro": orderData.pickupDate,
+                    "Ora Ritiro": orderData.pickupTime,
+                    "Nome Prodotto": item.name,
+                    "Quantità": item.quantity,
+                    "Prezzo": item.price,
+                    "Totale": orderData.amountPaid,
+                }
             };
 
-            console.log("📦 Dati inviati a Zapier:", orderData);
+            const airtableResponse = await fetch(AIRTABLE_URL, {
+                method: "POST",
+                headers: airtableHeaders,
+                body: JSON.stringify(airtablePayload),
+            });
 
-            // ✅ Invio separato per ogni prodotto
-            try {
-                const zapierResponse = await fetch(zapierWebhookUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(orderData),
-                });
-
-                const zapierResult = await zapierResponse.text();
-                console.log("🚀 Risposta di Zapier:", zapierResult);
-
-            } catch (error) {
-                console.error("❌ Errore nell'invio dei dati a Zapier:", error);
-            }
+            const airtableResult = await airtableResponse.json();
+            console.log("📤 Dati inviati a Airtable:", airtableResult);
         }
 
         res.json(session);
 
     } catch (error) {
-        console.error("❌ Errore nel recupero della sessione:", error);
+        console.error("❌ Errore nel recupero della sessione o invio a Airtable:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-
-// ✅ AVVIO DEL SERVER
+// ✅ **Avvio del server**
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ Server in esecuzione su porta ${PORT}`);
 });
