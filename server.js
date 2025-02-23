@@ -62,10 +62,15 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 
         // Definizione dei limiti per fascia oraria
         const limitPerTimeSlot = {
-            "9.00": 50,
+            "9.00": 20,
             "9.30": 30,
             "10.00": 40,
             "10.30": 20,
+            "11.00": 20,
+            "11.30": 20,
+            "12.00": 30,
+            "12.30": 30,
+            "13.00": 30,
         };
 
         const maxAllowed = limitPerTimeSlot[pickupTime] || 1000; // Default alto se non specificato
