@@ -15,7 +15,6 @@ app.use(cors({
     credentials: true
 }));
 
-
 const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
@@ -30,6 +29,54 @@ const airtableHeaders = {
     "Content-Type": "application/json",
 };
 
+// ✅ **Rotta per controllare la disponibilità basata sulla fascia oraria e data**
+app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
+    try {
+        const pickupTime = req.params.pickupTime;
+        const pickupDate = req.params.pickupDate;
+
+        console.log(`📊 Controllo disponibilità per il ${pickupDate} alle ${pickupTime}`);
+
+        // 📌 Recupera gli ordini esistenti filtrando per data e orario
+        const airtableResponse = await fetch(
+            `${AIRTABLE_URL}?filterByFormula=AND({Orario di Ritiro}="${pickupTime}", {Data Ritiro}="${pickupDate}")`,
+            {
+                method: "GET",
+                headers: airtableHeaders,
+            }
+        );
+
+        const airtableResult = await airtableResponse.json();
+
+        if (airtableResult.error) {
+            console.error("❌ Errore nel recupero dei dati da Airtable:", airtableResult.error);
+            return res.status(500).json({ error: airtableResult.error });
+        }
+
+        let totalProductsBooked = 0;
+        airtableResult.records.forEach((record) => {
+            totalProductsBooked += parseInt(record.fields["Quantità"], 10);
+        });
+
+        console.log(`📊 Totale prodotti prenotati per ${pickupDate} alle ${pickupTime}:`, totalProductsBooked);
+
+        // Definizione dei limiti per fascia oraria
+        const limitPerTimeSlot = {
+            "9.00": 50,
+            "9.30": 30,
+            "10.00": 40,
+            "10.30": 20,
+        };
+
+        const maxAllowed = limitPerTimeSlot[pickupTime] || 1000; // Default alto se non specificato
+
+        res.json({ totalProductsBooked, maxAllowed });
+    } catch (error) {
+        console.error("❌ Errore nel recupero della disponibilità:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "https://gran-bar.webflow.io");
@@ -37,7 +84,7 @@ app.post("/create-checkout-session", async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
     try {
-        const { items, orderNumber, pickupDate, pickupTime } = req.body;
+        const { items, orderNumber, pickupDate, pickupTime, termsAccepted } = req.body;
 
         console.log("Dati ricevuti dal frontend:", req.body);
 
@@ -57,6 +104,7 @@ app.post("/create-checkout-session", async (req, res) => {
                 pickupDate,
                 pickupTime,
                 items: JSON.stringify(items),
+                termsAccepted: termsAccepted,
             },
             success_url: "https://gran-bar.webflow.io/success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://gran-bar.webflow.io/cancel",
@@ -70,7 +118,6 @@ app.post("/create-checkout-session", async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 
 // ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
 app.get("/checkout-session/:sessionId", async (req, res) => {
@@ -90,6 +137,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
             amountPaid: (session.amount_total / 100).toFixed(2),
             pickupDate: session.metadata.pickupDate,
             pickupTime: session.metadata.pickupTime,
+            termsAccepted: session.metadata.termsAccepted || "Non specificato",
             items: JSON.parse(session.metadata.items),
         };
 
@@ -106,7 +154,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 "Nome Prodotto": item.name,
                 "Quantità": item.quantity,
                 "Totale Pagamento": parseFloat(orderData.amountPaid),
-                "Accettazione Termini": "Accettato",
+                "Accettazione Termini": orderData.termsAccepted,
             }
         }));
 
