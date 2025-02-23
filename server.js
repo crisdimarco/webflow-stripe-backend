@@ -106,6 +106,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
                 "Nome Prodotto": item.name,
                 "Quantità": item.quantity,
                 "Totale Pagamento": parseFloat(orderData.amountPaid),
+                "Accettazione Termini": "Accettato",
             }
         }));
 
