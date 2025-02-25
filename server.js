@@ -29,38 +29,31 @@ const airtableHeaders = {
     "Content-Type": "application/json",
 };
 
-// ✅ **Rotta per controllare la disponibilità basata sulla fascia oraria e data**
+// ✅ **Rotta per controllare la disponibilità della fascia oraria selezionata**
 app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
     try {
-        const pickupTime = req.params.pickupTime;
-        const pickupDate = req.params.pickupDate;
+        const { pickupTime, pickupDate } = req.params;
 
         console.log(`📊 Controllo disponibilità per il ${pickupDate} alle ${pickupTime}`);
 
-        // 📌 Recupera gli ordini esistenti filtrando per data e orario
-        const airtableResponse = await fetch(
-            `${AIRTABLE_URL}?filterByFormula=AND({Orario di Ritiro}="${pickupTime}", {Data Ritiro}="${pickupDate}")`,
-            {
-                method: "GET",
-                headers: airtableHeaders,
-            }
-        );
+        // 📌 **Filtra direttamente su Airtable solo gli ordini con la stessa data e orario**
+        const airtableQuery = `${AIRTABLE_URL}?filterByFormula=AND({Data Ritiro}='${pickupDate}', {Orario di Ritiro}='${pickupTime}')`;
+        
+        const response = await fetch(airtableQuery, { headers: airtableHeaders });
+        const data = await response.json();
 
-        const airtableResult = await airtableResponse.json();
-
-        if (airtableResult.error) {
-            console.error("❌ Errore nel recupero dei dati da Airtable:", airtableResult.error);
-            return res.status(500).json({ error: airtableResult.error });
+        if (data.error) {
+            console.error("❌ Errore nel recupero dati da Airtable:", data.error);
+            return res.status(500).json({ error: data.error });
         }
 
+        // 📌 **Calcola il numero totale di prodotti prenotati in quella fascia oraria**
         let totalProductsBooked = 0;
-        airtableResult.records.forEach((record) => {
-            totalProductsBooked += parseInt(record.fields["Quantità"], 10);
+        data.records.forEach(record => {
+            totalProductsBooked += record.fields["Quantità"] || 0;
         });
 
-        console.log(`📊 Totale prodotti prenotati per ${pickupDate} alle ${pickupTime}:`, totalProductsBooked);
-
-        // Definizione dei limiti per fascia oraria
+        // 📌 **Definisci i limiti per fascia oraria**
         const limitPerTimeSlot = {
             "9.00": 20,
             "9.30": 30,
@@ -75,12 +68,22 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 
         const maxAllowed = limitPerTimeSlot[pickupTime] || 1000; // Default alto se non specificato
 
-        res.json({ totalProductsBooked, maxAllowed });
+        console.log(`📊 Totale prodotti prenotati: ${totalProductsBooked} / Limite: ${maxAllowed}`);
+
+        res.json({
+            pickupTime,
+            pickupDate,
+            totalProductsBooked,
+            maxAllowed,
+            available: totalProductsBooked < maxAllowed
+        });
+
     } catch (error) {
-        console.error("❌ Errore nel recupero della disponibilità:", error);
+        console.error("❌ Errore nel controllo disponibilità:", error);
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
