@@ -9,7 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: "https://gran-bar.webflow.io", // Sostituisci con il tuo dominio Webflow
+    origin: "https://www.gran-bar.it", // Sostituisci con il tuo dominio Webflow
     methods: "GET,POST,OPTIONS",
     allowedHeaders: "Content-Type,Authorization",
     credentials: true
@@ -87,7 +87,7 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "https://gran-bar.webflow.io");
+    res.setHeader("Access-Control-Allow-Origin", "https://www.gran-bar.it");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
@@ -114,8 +114,8 @@ app.post("/create-checkout-session", async (req, res) => {
                 items: JSON.stringify(items),
                 termsAccepted: termsAccepted,
             },
-            success_url: "https://gran-bar.webflow.io/success?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url: "https://gran-bar.webflow.io/cancel",
+            success_url: "https://www.gran-bar.it/success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url: "https://www.gran-bar.it/cancel",
         });
 
         console.log("✅ Sessione creata:", session);
