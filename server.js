@@ -8,8 +8,19 @@ dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(express.json());
+const allowedOrigins = [
+    "https://www.gran-bar.it",
+    "https://gran-bar-6108bf3b205aa5d212cc988270c94b.webflow.io"
+];
+
 app.use(cors({
-    origin: "https://www.gran-bar.it", // Sostituisci con il tuo dominio Webflow
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     methods: "GET,POST,OPTIONS",
     allowedHeaders: "Content-Type,Authorization",
     credentials: true
