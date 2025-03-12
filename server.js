@@ -6,8 +6,11 @@ import Stripe from "stripe";
 
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const app = express();
 
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+// ✅ **Configurazione CORS dinamica**
 const allowedOrigins = [
     "https://www.gran-bar.it",
     "https://gran-bar-6108bf3b205aa5d212cc988270c94b.webflow.io"
@@ -20,7 +23,6 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// ✅ **Gestione CORS dinamica**
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
@@ -37,8 +39,6 @@ app.use((req, res, next) => {
     next();
 });
 
-const PORT = process.env.PORT || 10000;
-
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
@@ -51,19 +51,18 @@ const airtableHeaders = {
     "Content-Type": "application/json",
 };
 
-// ✅ **Rotta di test per verificare che il server risponda**
+// ✅ **Rotta di test per verificare il server**
 app.get("/", (req, res) => {
     res.send("✅ Il server è attivo!");
 });
 
-// ✅ **Rotta per controllare la disponibilità della fascia oraria selezionata**
+// ✅ **Rotta per controllare la disponibilità della fascia oraria**
 app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
     try {
         const { pickupTime, pickupDate } = req.params;
 
         console.log(`📊 Controllo disponibilità per il ${pickupDate} alle ${pickupTime}`);
 
-        // 📌 **Filtra direttamente su Airtable solo gli ordini con la stessa data e orario**
         const airtableQuery = `${AIRTABLE_URL}?filterByFormula=AND({Data Ritiro}='${pickupDate}', {Orario di Ritiro}='${pickupTime}')`;
 
         const response = await fetch(airtableQuery, { headers: airtableHeaders });
@@ -74,26 +73,17 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
             return res.status(500).json({ error: data.error });
         }
 
-        // 📌 **Calcola il numero totale di prodotti prenotati in quella fascia oraria**
         let totalProductsBooked = 0;
         data.records.forEach(record => {
             totalProductsBooked += record.fields["Quantità"] || 0;
         });
 
-        // 📌 **Definisci i limiti per fascia oraria**
         const limitPerTimeSlot = {
-            "9.00": 20,
-            "9.30": 30,
-            "10.00": 40,
-            "10.30": 20,
-            "11.00": 20,
-            "11.30": 20,
-            "12.00": 30,
-            "12.30": 30,
-            "13.00": 30,
+            "9.00": 20, "9.30": 30, "10.00": 40, "10.30": 20,
+            "11.00": 20, "11.30": 20, "12.00": 30, "12.30": 30, "13.00": 30,
         };
 
-        const maxAllowed = limitPerTimeSlot[pickupTime] || 1000; // Default alto se non specificato
+        const maxAllowed = limitPerTimeSlot[pickupTime] || 1000; 
 
         console.log(`📊 Totale prodotti prenotati: ${totalProductsBooked} / Limite: ${maxAllowed}`);
 
@@ -113,15 +103,10 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-
     try {
         const { items, orderNumber, pickupDate, pickupTime, termsAccepted } = req.body;
-
-        console.log("📦 Dati ricevuti:", req.body);
+        
+        console.log("📦 Dati ricevuti dal frontend:", req.body);
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
@@ -139,13 +124,13 @@ app.post("/create-checkout-session", async (req, res) => {
                 pickupDate,
                 pickupTime,
                 items: JSON.stringify(items),
-                termsAccepted: termsAccepted,
+                termsAccepted,
             },
-            success_url: "https://www.gran-bar.it/success?session_id={CHECKOUT_SESSION_ID}",
+            success_url: `https://www.gran-bar.it/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: "https://www.gran-bar.it/cancel",
         });
 
-        console.log("✅ Sessione creata:", session);
+        console.log("✅ Sessione Stripe creata:", session.id);
         res.json({ url: session.url });
 
     } catch (error) {
@@ -157,14 +142,19 @@ app.post("/create-checkout-session", async (req, res) => {
 // ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
 app.get("/checkout-session/:sessionId", async (req, res) => {
     try {
-        const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
-        console.log("💳 Dati della sessione di pagamento:", session);
+        const sessionId = req.params.sessionId;
+        console.log("🔍 Recupero sessione Stripe con ID:", sessionId);
 
-        // 📌 **Prendiamo nome ed email da Stripe**
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        if (!session) {
+            throw new Error(`❌ Nessuna sessione trovata con ID: ${sessionId}`);
+        }
+
+        console.log("💳 Dati della sessione Stripe:", session);
+
         const customerName = session.customer_details?.name || "Nome non disponibile";
         const customerEmail = session.customer_details?.email || "Email non disponibile";
 
-        // 📌 **Estrarre i dati della sessione**
         const orderData = {
             orderNumber: session.metadata.orderNumber,
             customerName,
@@ -178,7 +168,6 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
 
         console.log("📤 Dati da inviare a Airtable:", orderData);
 
-        // 📌 **Invia ogni prodotto come un record su Airtable**
         const airtableRecords = orderData.items.map(item => ({
             fields: {
                 "Numero Ordine": orderData.orderNumber,
