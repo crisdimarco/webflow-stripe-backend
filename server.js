@@ -7,6 +7,10 @@ import Stripe from "stripe";
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
+app.use((req, res, next) => {
+    console.log("🌍 Richiesta ricevuta da:", req.headers.origin);
+    next();
+});
 app.use(express.json());
 const allowedOrigins = [
     "https://www.gran-bar.it",
