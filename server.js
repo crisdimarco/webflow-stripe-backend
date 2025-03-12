@@ -126,8 +126,8 @@ app.post("/create-checkout-session", async (req, res) => {
                 items: JSON.stringify(items),
                 termsAccepted,
             },
-            success_url: `https://www.gran-bar.it/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: "https://www.gran-bar.it/cancel",
+            success_url: `https://gran-bar-6108bf3b205aa5d212cc988270c94b.webflow.io/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: "https://gran-bar-6108bf3b205aa5d212cc988270c94b.webflow.io/cancel",
         });
 
         console.log("✅ Sessione Stripe creata:", session.id);
