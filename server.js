@@ -25,7 +25,7 @@ const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID;
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
 const airtableHeaders = {
-    "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
+    "Authorization": `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
     "Content-Type": "application/json",
 };
 
