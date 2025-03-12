@@ -7,16 +7,20 @@ import Stripe from "stripe";
 dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
-app.use((req, res, next) => {
-    console.log("🌍 Richiesta ricevuta da:", req.headers.origin);
-    next();
-});
-app.use(express.json());
+
 const allowedOrigins = [
     "https://www.gran-bar.it",
     "https://gran-bar-6108bf3b205aa5d212cc988270c94b.webflow.io"
 ];
 
+app.use((req, res, next) => {
+    console.log("🌍 Richiesta ricevuta da:", req.headers.origin);
+    next();
+});
+
+app.use(express.json());
+
+// ✅ **Gestione CORS dinamica**
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
@@ -37,15 +41,20 @@ const PORT = process.env.PORT || 10000;
 
 // 📌 **Configurazione Airtable**
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID; 
-const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID; 
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID;
 
 const AIRTABLE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_ID}`;
 
 const airtableHeaders = {
-    "Authorization": `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
+    "Authorization": `Bearer ${AIRTABLE_API_KEY}`,
     "Content-Type": "application/json",
 };
+
+// ✅ **Rotta di test per verificare che il server risponda**
+app.get("/", (req, res) => {
+    res.send("✅ Il server è attivo!");
+});
 
 // ✅ **Rotta per controllare la disponibilità della fascia oraria selezionata**
 app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
@@ -56,7 +65,7 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 
         // 📌 **Filtra direttamente su Airtable solo gli ordini con la stessa data e orario**
         const airtableQuery = `${AIRTABLE_URL}?filterByFormula=AND({Data Ritiro}='${pickupDate}', {Orario di Ritiro}='${pickupTime}')`;
-        
+
         const response = await fetch(airtableQuery, { headers: airtableHeaders });
         const data = await response.json();
 
@@ -102,17 +111,17 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
     }
 });
 
-
 // ✅ **Rotta per creare la sessione Stripe**
 app.post("/create-checkout-session", async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "https://www.gran-bar.it");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+    }
 
     try {
         const { items, orderNumber, pickupDate, pickupTime, termsAccepted } = req.body;
 
-        console.log("Dati ricevuti dal frontend:", req.body);
+        console.log("📦 Dati ricevuti:", req.body);
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
@@ -167,7 +176,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
             items: JSON.parse(session.metadata.items),
         };
 
-        console.log("📦 Dati ordine da inviare a Airtable:", orderData);
+        console.log("📤 Dati da inviare a Airtable:", orderData);
 
         // 📌 **Invia ogni prodotto come un record su Airtable**
         const airtableRecords = orderData.items.map(item => ({
@@ -184,23 +193,16 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
             }
         }));
 
-        const airtableResponse = await fetch(AIRTABLE_URL, {
+        await fetch(AIRTABLE_URL, {
             method: "POST",
             headers: airtableHeaders,
-            body: JSON.stringify({ records: airtableRecords }), // Invio multiplo
+            body: JSON.stringify({ records: airtableRecords }),
         });
 
-        const airtableResult = await airtableResponse.json();
-        console.log("📤 Dati inviati a Airtable:", airtableResult);
-
-        if (airtableResult.error) {
-            console.error("❌ Errore nell'invio ad Airtable:", airtableResult.error);
-        }
-
-        res.json(orderData); // ✅ Ritorniamo i dati alla pagina success
+        res.json(orderData);
 
     } catch (error) {
-        console.error("❌ Errore nel recupero della sessione o invio a Airtable:", error);
+        console.error("❌ Errore nel recupero della sessione:", error);
         res.status(500).json({ error: error.message });
     }
 });
