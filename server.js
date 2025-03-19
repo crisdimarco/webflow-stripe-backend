@@ -102,7 +102,11 @@ app.post("/create-checkout-session", async (req, res) => {
                 price_data: {
                     currency: "eur",
                     product_data: { name: item.name },
-                    unit_amount: Math.round(item.price * 100),
+                    unit_amount: Math.round(
+                        (item.discountedPrice && item.discountedPrice > 0) 
+                        ? item.discountedPrice * 100 // Usa il prezzo scontato se presente
+                        : item.price * 100 // Altrimenti usa il prezzo originale
+                    ),
                 },
                 quantity: item.quantity,
             })),
@@ -126,6 +130,7 @@ app.post("/create-checkout-session", async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ✅ **Rotta per recuperare la sessione Stripe e inviare dati a Airtable**
 app.get("/checkout-session/:sessionId", async (req, res) => {
