@@ -205,6 +205,23 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
     }
 });
 
+// ✅ Recupera dati della sessione Stripe
+app.get("/check-session", async (req, res) => {
+  const { session_id } = req.query;
+  try {
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    res.json({
+      orderNumber: session.metadata.orderNumber,
+      items: session.metadata.items,
+      pickupDate: session.metadata.pickupDate,
+      pickupTime: session.metadata.pickupTime
+    });
+  } catch (error) {
+    console.error("❌ Errore recupero sessione Stripe:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ✅ **Avvio del server**
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ Server in esecuzione su porta ${PORT}`);
