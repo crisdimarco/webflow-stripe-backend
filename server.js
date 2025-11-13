@@ -85,21 +85,20 @@ app.get("/check-availability/:pickupTime/:pickupDate", async (req, res) => {
 });
 
 
-// ✅ Rotta per creare la sessione Stripe (versione unificata)
+//️⃣ Rotta unificata per home + panettoni
 app.post("/create-checkout-session", async (req, res) => {
-    // Abilita il CORS solo per il dominio ufficiale
+
     res.setHeader("Access-Control-Allow-Origin", "https://www.gran-bar.it");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
     try {
-        // Accetta sia "items" (vecchio formato) che "cart" (nuovo per panettoni)
-        const { items, cart, orderNumber, pickupDate, pickupTime, termsAccepted, successUrl } = req.body;
+        const { items, cart, successUrl } = req.body;
 
         console.log("📦 Dati ricevuti dal frontend:", req.body);
 
-        // Usa la lista corretta di prodotti
-        const productList = items || cart || [];
+        // Usa la lista corretta per Stripe (home o panettoni)
+        const productList = cart || items || [];
 
         if (productList.length === 0) {
             return res.status(400).json({ error: "Nessun prodotto nel carrello." });
@@ -111,31 +110,34 @@ app.post("/create-checkout-session", async (req, res) => {
                 currency: "eur",
                 product_data: { name: item.name },
                 unit_amount: Math.round(
-                    (item.discountedPrice && item.discountedPrice > 0)
-                        ? item.discountedPrice * 100
-                        : (item.price || item.deposit || 0) * 100
+                    item.deposit ? item.deposit * 100 :
+                    item.discountedPrice ? item.discountedPrice * 100 :
+                    item.price ? item.price * 100 :
+                    0
                 ),
             },
-            quantity: item.quantity || 1,
+            quantity: item.quantity,
         }));
 
-        // Crea la sessione Stripe
+        // Genera codice ordine unico
+        const generatedOrder = `PN-${Math.floor(100000 + Math.random() * 900000)}`;
+
+        // Crea sessione Stripe
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
             line_items: lineItems,
             mode: "payment",
             metadata: {
-                orderNumber: orderNumber || `PN-${Math.floor(Math.random() * 100000)}`,
-                pickupDate: pickupDate || "non richiesto",
-                pickupTime: pickupTime || "non richiesto",
-                items: JSON.stringify(productList),
-                termsAccepted: termsAccepted || "non richiesti",
+                orderNumber: generatedOrder,
+                items: JSON.stringify(productList)
             },
-            success_url: successUrl || "https://www.gran-bar.it/success-panettoni?session_id={CHECKOUT_SESSION_ID}",
+            success_url:
+                "https://www.gran-bar.it/success-panettoni?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://www.gran-bar.it/cancel",
         });
 
         console.log("✅ Sessione Stripe creata:", session.id);
+
         res.json({ url: session.url });
 
     } catch (error) {
