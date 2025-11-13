@@ -205,6 +205,39 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
     }
 });
 
+// ✅ Rotta dedicata per la pagina success-panettoni
+app.get("/checkout-session-panettoni/:sessionId", async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        console.log("📥 Richiesta dati panettoni per sessione:", sessionId);
+
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        if (!session) {
+            return res.status(404).json({ error: "Sessione non trovata." });
+        }
+
+        // Ricava i dati
+        const orderData = {
+            orderNumber: session.metadata.orderNumber || null,
+            customerName: session.customer_details?.name || null,
+            customerEmail: session.customer_details?.email || null,
+            totalPaid: session.amount_total
+                ? (session.amount_total / 100).toFixed(2)
+                : "0.00",
+            items: session.metadata.items || "[]"
+        };
+
+        console.log("📦 Dati inviati al frontend:", orderData);
+
+        res.json(orderData);
+
+    } catch (error) {
+        console.error("❌ ERRORE nella rotta panettoni:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ✅ Recupera dati della sessione Stripe
 app.get("/check-session", async (req, res) => {
   const { session_id } = req.query;
