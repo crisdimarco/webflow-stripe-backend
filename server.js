@@ -181,6 +181,8 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
 
     console.log("📤 Invio ad Airtable:", orderData);
 
+    // 💡 FIX IMPORTANTE:
+    // Usa item.deposit per salvare l'acconto reale relativo a quel prodotto
     const records = items.map((item) => ({
       fields: {
         "Numero Ordine": orderData.orderNumber,
@@ -188,7 +190,7 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         "Email Cliente": orderData.customerEmail,
         "Nome Prodotto": item.name,
         "Quantità": item.quantity,
-        "Totale Pagamento": parseFloat(orderData.amountPaid),
+        "Totale Pagamento": item.deposit, // 🔥 OGNI PRODOTTO HA IL SUO TOTALE
       },
     }));
 
