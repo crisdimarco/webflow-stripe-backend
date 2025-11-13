@@ -207,6 +207,62 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
   }
 });
 
+app.get("/verify-order/:orderNumber", async (req, res) => {
+  try {
+    const orderNumber = req.params.orderNumber;
+
+    const query = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
+
+    const response = await fetch(query, { headers: airtableHeaders });
+    const data = await response.json();
+
+    if (!data.records || data.records.length === 0) {
+      return res.status(404).json({ status: "NOT_FOUND" });
+    }
+
+    const record = data.records[0];
+    const stato = record.fields["Stato Ordine"] || "Prenotato";
+
+    res.json({
+      status: stato === "Ritirato" ? "ALREADY_PICKED" : "VALID",
+      recordId: record.id
+    });
+
+  } catch (error) {
+    console.error("❌ Errore verifica ordine:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/mark-as-picked", async (req, res) => {
+  try {
+    const { recordId } = req.body;
+
+    const updatePayload = {
+      records: [
+        {
+          id: recordId,
+          fields: { "Stato Ordine": "Ritirato" }
+        }
+      ]
+    };
+
+    const airtableResponse = await fetch(AIRTABLE_URL, {
+      method: "PATCH",
+      headers: airtableHeaders,
+      body: JSON.stringify(updatePayload)
+    });
+
+    const result = await airtableResponse.json();
+
+    res.json({ success: true, result });
+
+  } catch (error) {
+    console.error("❌ Errore aggiornamento ordine:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ----------------------------------------------------
 // 🚀 AVVIO SERVER
 // ----------------------------------------------------
