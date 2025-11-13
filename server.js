@@ -104,20 +104,15 @@ app.post("/create-checkout-session", async (req, res) => {
             return res.status(400).json({ error: "Nessun prodotto nel carrello." });
         }
 
-        // Mappa i prodotti per Stripe
-        const lineItems = productList.map(item => ({
-            price_data: {
-                currency: "eur",
-                product_data: { name: item.name },
-                unit_amount: Math.round(
-                    item.deposit ? item.deposit * 100 :
-                    item.discountedPrice ? item.discountedPrice * 100 :
-                    item.price ? item.price * 100 :
-                    0
-                ),
-            },
-            quantity: item.quantity,
-        }));
+        // Mappa i prodotti per Stripe (prezzo fisso: acconto 20€ a panettone)
+const lineItems = productList.map(item => ({
+    price_data: {
+        currency: "eur",
+        product_data: { name: item.name },
+        unit_amount: 20 * 100, // 💶 prezzo unitario fisso: 20€
+    },
+    quantity: item.quantity, // la quantità moltiplica il prezzo
+}));
 
         // Genera codice ordine unico
         const generatedOrder = `PN-${Math.floor(100000 + Math.random() * 900000)}`;
