@@ -264,6 +264,65 @@ app.post("/mark-as-picked", async (req, res) => {
 });
 
 // ----------------------------------------------------
+// ✅ ROTTA PER VERIFICARE ORDINE (pagina /verify)
+// ----------------------------------------------------
+app.get("/verify-order", async (req, res) => {
+  try {
+    const orderNumber = req.query.order;
+
+    if (!orderNumber) {
+      return res.status(400).json({ error: "Nessun ordine specificato" });
+    }
+
+    console.log("🔍 Verifica ordine:", orderNumber);
+
+    // Cerca l'ordine su Airtable
+    const query = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
+
+    const response = await fetch(query, { headers: airtableHeaders });
+    const data = await response.json();
+
+    if (!data.records || data.records.length === 0) {
+      return res.json({ exists: false });
+    }
+
+    // Prende il primo record (gli altri hanno stessi dati)
+    const record = data.records[0];
+    const status = record.fields["Order Status"] || "pending";
+
+    // Se è già verificato evita verifiche ripetute
+    if (status === "verified") {
+      return res.json({
+        exists: true,
+        alreadyVerified: true,
+        order: record.fields,
+      });
+    }
+
+    // Aggiorna stato → verified
+    await fetch(`${AIRTABLE_URL}/${record.id}`, {
+      method: "PATCH",
+      headers: airtableHeaders,
+      body: JSON.stringify({
+        fields: {
+          "Order Status": "verified",
+        },
+      }),
+    });
+
+    return res.json({
+      exists: true,
+      alreadyVerified: false,
+      order: record.fields,
+    });
+
+  } catch (error) {
+    console.error("❌ Errore verifica ordine:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ----------------------------------------------------
 // 🚀 AVVIO SERVER
 // ----------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
