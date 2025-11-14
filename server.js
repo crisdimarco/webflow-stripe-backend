@@ -329,49 +329,39 @@ app.get("/verify-order/:orderNumber", async (req, res) => {
   try {
     const orderNumber = req.params.orderNumber;
 
-    // cerca tutte le righe con quel Numero Ordine
     const queryUrl = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
 
-    const airtableRes = await fetch(queryUrl, {
-      headers: airtableHeaders,
-    });
-
+    const airtableRes = await fetch(queryUrl, { headers: airtableHeaders });
     const data = await airtableRes.json();
 
     if (!data.records || data.records.length === 0) {
       return res.json({ found: false });
     }
 
-    // Prima riga → dati cliente
+    // Prima riga = dati cliente
     const first = data.records[0].fields;
 
-    // Totale acconto = somma dei "Totale Pagamento" di tutte le righe
-    const totalPaid = data.records.reduce(
-      (sum, rec) => sum + (rec.fields["Totale Pagamento"] || 0),
-      0
-    );
-
-    const items = data.records.map((rec) => ({
-      name: rec.fields["Nome Prodotto"],
-      quantity: rec.fields["Quantità"],
-      deposit: rec.fields["Totale Pagamento"],
+    // Lista prodotti
+    const items = data.records.map(r => ({
+      name: r.fields["Nome Prodotto"],
+      quantity: r.fields["Quantità"],
+      deposit: r.fields["Totale Pagamento"]    // 💶 già corretto per singola riga
     }));
 
     const result = {
       found: true,
       orderNumber,
-      customerName: first["Nome Cliente"] || "",
-      customerEmail: first["Email Cliente"] || "",
-      totalPaid: totalPaid.toFixed(2),
-      status: first["Stato Ordine"] || "Prenotato",
-      items,
+      customerName: first["Nome Cliente"],
+      customerEmail: first["Email Cliente"],
+      totalPaid: data.records.reduce((t, r) => t + (r.fields["Totale Pagamento"] || 0), 0),
+      status: first["Order Status"] || "Pending",
+      items
     };
 
-    console.log("🔎 Risultato verifica ordine:", result);
-
     res.json(result);
+
   } catch (err) {
-    console.error("❌ ERRORE verifica ordine:", err);
+    console.error("❌ ERRORE verify-order:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -382,29 +372,28 @@ app.get("/verify-order-mark/:orderNumber", async (req, res) => {
     const orderNumber = req.params.orderNumber;
 
     const queryUrl = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
-    const data = await fetch(queryUrl, {
-      headers: airtableHeaders,
-    }).then((r) => r.json());
+    const data = await fetch(queryUrl, { headers: airtableHeaders }).then(r => r.json());
 
-    if (!data.records || !data.records.length) {
-      return res.json({ ok: false });
+    if (!data.records.length) {
+      return res.json({ ok: false, error: "Ordine non trovato" });
     }
 
-    const updates = data.records.map((rec) => ({
+    const updates = data.records.map(rec => ({
       id: rec.id,
-      fields: { "Stato Ordine": "Ritirato" }, // 👈 stesso campo usato nella verifica
+      fields: { "Order Status": "verified" }
     }));
 
     await fetch(AIRTABLE_URL, {
       method: "PATCH",
       headers: airtableHeaders,
-      body: JSON.stringify({ records: updates }),
+      body: JSON.stringify({ records: updates })
     });
 
     res.json({ ok: true });
+
   } catch (err) {
-    console.error("❌ ERRORE verify-order-mark:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ Errore verify-order-mark:", err);
+    res.json({ ok: false });
   }
 });
 
