@@ -323,6 +323,53 @@ app.get("/verify-order", async (req, res) => {
 });
 
 // ----------------------------------------------------
+// ✅ VERIFICA ORDINE (usato dalla pagina /verify)
+// ----------------------------------------------------
+app.get("/verify-order/:orderNumber", async (req, res) => {
+  try {
+    const orderNumber = req.params.orderNumber;
+
+    // cerca tutte le righe con quel Numero Ordine
+    const queryUrl = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
+
+    const airtableRes = await fetch(queryUrl, {
+      headers: airtableHeaders
+    });
+
+    const data = await airtableRes.json();
+
+    if (!data.records || data.records.length === 0) {
+      return res.json({ found: false });
+    }
+
+    // Ricaviamo i dati dalla PRIMA riga (tutte hanno gli stessi dati del cliente)
+    const first = data.records[0].fields;
+
+    const items = data.records.map(rec => ({
+      name: rec.fields["Nome Prodotto"],
+      quantity: rec.fields["Quantità"],
+      deposit: 20 * rec.fields["Quantità"]
+    }));
+
+    const result = {
+      found: true,
+      orderNumber,
+      customerName: first["Nome Cliente"],
+      customerEmail: first["Email Cliente"],
+      totalPaid: first["Totale Pagamento"],
+      status: first["Status"] || "pending",
+      items
+    };
+
+    res.json(result);
+
+  } catch (err) {
+    console.error("❌ ERRORE verifica ordine:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
 // 🚀 AVVIO SERVER
 // ----------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
