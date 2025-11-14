@@ -369,6 +369,34 @@ app.get("/verify-order/:orderNumber", async (req, res) => {
   }
 });
 
+// Segna come verificato tutte le righe di un ordine
+app.get("/verify-order-mark/:orderNumber", async (req, res) => {
+  try {
+    const orderNumber = req.params.orderNumber;
+
+    const queryUrl = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
+    const data = await fetch(queryUrl, { headers: airtableHeaders }).then(r => r.json());
+
+    if (!data.records.length) return res.json({ ok: false });
+
+    const updates = data.records.map(rec => ({
+      id: rec.id,
+      fields: { Status: "verified" }
+    }));
+
+    await fetch(AIRTABLE_URL, {
+      method: "PATCH",
+      headers: airtableHeaders,
+      body: JSON.stringify({ records: updates })
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false });
+  }
+});
+
 // ----------------------------------------------------
 // 🚀 AVVIO SERVER
 // ----------------------------------------------------
