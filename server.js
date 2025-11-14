@@ -131,7 +131,7 @@ app.post("/create-checkout-session", async (req, res) => {
 });
 
 // ----------------------------------------------------
-// ✅ RECUPERA DATI DELLA SESSIONE (HOME + PANETTONI)
+// ✅ RECUPERA DATI DELLA SESSIONE (SUCCESS PANETTONI)
 // ----------------------------------------------------
 app.get("/checkout-session-panettoni/:sessionId", async (req, res) => {
   try {
@@ -151,7 +151,7 @@ app.get("/checkout-session-panettoni/:sessionId", async (req, res) => {
       items: JSON.parse(session.metadata.items || "[]"),
     };
 
-    console.log("📦 Dati ordine:", response);
+    console.log("📦 Dati ordine (success):", response);
 
     res.json(response);
   } catch (error) {
@@ -181,8 +181,6 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
 
     console.log("📤 Invio ad Airtable:", orderData);
 
-    // 💡 FIX IMPORTANTE:
-    // Usa item.deposit per salvare l'acconto reale relativo a quel prodotto
     const records = items.map((item) => ({
       fields: {
         "Numero Ordine": orderData.orderNumber,
@@ -190,7 +188,8 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
         "Email Cliente": orderData.customerEmail,
         "Nome Prodotto": item.name,
         "Quantità": item.quantity,
-        "Totale Pagamento": item.deposit, // 🔥 OGNI PRODOTTO HA IL SUO TOTALE
+        "Totale Pagamento": item.deposit, // totale acconto di QUEL prodotto
+        "Order Status": "Pending",
       },
     }));
 
@@ -207,64 +206,8 @@ app.get("/checkout-session/:sessionId", async (req, res) => {
   }
 });
 
-app.get("/verify-order/:orderNumber", async (req, res) => {
-  try {
-    const orderNumber = req.params.orderNumber;
-
-    const query = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
-
-    const response = await fetch(query, { headers: airtableHeaders });
-    const data = await response.json();
-
-    if (!data.records || data.records.length === 0) {
-      return res.status(404).json({ status: "NOT_FOUND" });
-    }
-
-    const record = data.records[0];
-    const stato = record.fields["Stato Ordine"] || "Prenotato";
-
-    res.json({
-      status: stato === "Ritirato" ? "ALREADY_PICKED" : "VALID",
-      recordId: record.id
-    });
-
-  } catch (error) {
-    console.error("❌ Errore verifica ordine:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post("/mark-as-picked", async (req, res) => {
-  try {
-    const { recordId } = req.body;
-
-    const updatePayload = {
-      records: [
-        {
-          id: recordId,
-          fields: { "Stato Ordine": "Ritirato" }
-        }
-      ]
-    };
-
-    const airtableResponse = await fetch(AIRTABLE_URL, {
-      method: "PATCH",
-      headers: airtableHeaders,
-      body: JSON.stringify(updatePayload)
-    });
-
-    const result = await airtableResponse.json();
-
-    res.json({ success: true, result });
-
-  } catch (error) {
-    console.error("❌ Errore aggiornamento ordine:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ----------------------------------------------------
-// ✅ ROTTA PER VERIFICARE ORDINE (pagina /verify)
+// ✅ VERIFICA ORDINE via QUERY (?order=...) – usato dal QR
 // ----------------------------------------------------
 app.get("/verify-order", async (req, res) => {
   try {
@@ -274,9 +217,8 @@ app.get("/verify-order", async (req, res) => {
       return res.status(400).json({ error: "Nessun ordine specificato" });
     }
 
-    console.log("🔍 Verifica ordine:", orderNumber);
+    console.log("🔍 Verifica (QR) ordine:", orderNumber);
 
-    // Cerca l'ordine su Airtable
     const query = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
 
     const response = await fetch(query, { headers: airtableHeaders });
@@ -286,11 +228,9 @@ app.get("/verify-order", async (req, res) => {
       return res.json({ exists: false });
     }
 
-    // Prende il primo record (gli altri hanno stessi dati)
     const record = data.records[0];
-    const status = record.fields["Order Status"] || "pending";
+    const status = record.fields["Order Status"] || "Pending";
 
-    // Se è già verificato evita verifiche ripetute
     if (status === "verified") {
       return res.json({
         exists: true,
@@ -299,15 +239,16 @@ app.get("/verify-order", async (req, res) => {
       });
     }
 
-    // Aggiorna stato → verified
-    await fetch(`${AIRTABLE_URL}/${record.id}`, {
+    // Aggiorna TUTTE le righe di quell’ordine a "verified"
+    const updates = data.records.map((r) => ({
+      id: r.id,
+      fields: { "Order Status": "verified" },
+    }));
+
+    await fetch(AIRTABLE_URL, {
       method: "PATCH",
       headers: airtableHeaders,
-      body: JSON.stringify({
-        fields: {
-          "Order Status": "verified",
-        },
-      }),
+      body: JSON.stringify({ records: updates }),
     });
 
     return res.json({
@@ -315,15 +256,14 @@ app.get("/verify-order", async (req, res) => {
       alreadyVerified: false,
       order: record.fields,
     });
-
   } catch (error) {
-    console.error("❌ Errore verifica ordine:", error);
+    console.error("❌ Errore verifica ordine (QR):", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ----------------------------------------------------
-// ✅ VERIFICA ORDINE (usato dalla pagina /verify)
+// ✅ VERIFICA ORDINE via /verify-order/:orderNumber – usata dalla pagina Webflow
 // ----------------------------------------------------
 app.get("/verify-order/:orderNumber", async (req, res) => {
   try {
@@ -342,55 +282,59 @@ app.get("/verify-order/:orderNumber", async (req, res) => {
     const first = data.records[0].fields;
 
     // Lista prodotti
-    const items = data.records.map(r => ({
+    const items = data.records.map((r) => ({
       name: r.fields["Nome Prodotto"],
       quantity: r.fields["Quantità"],
-      deposit: r.fields["Totale Pagamento"]    // 💶 già corretto per singola riga
+      deposit: r.fields["Totale Pagamento"], // valore per singola riga
     }));
+
+    const totalPaid = items.reduce((t, r) => t + (r.deposit || 0), 0);
 
     const result = {
       found: true,
       orderNumber,
       customerName: first["Nome Cliente"],
       customerEmail: first["Email Cliente"],
-      totalPaid: data.records.reduce((t, r) => t + (r.fields["Totale Pagamento"] || 0), 0),
+      totalPaid,
       status: first["Order Status"] || "Pending",
-      items
+      items,
     };
 
     res.json(result);
-
   } catch (err) {
-    console.error("❌ ERRORE verify-order:", err);
+    console.error("❌ ERRORE verify-order (pagina):", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Segna come verificato tutte le righe di un ordine
+// ----------------------------------------------------
+// ✅ MARCA COME VERIFIED TUTTE LE RIGHE DI UN ORDINE
+// ----------------------------------------------------
 app.get("/verify-order-mark/:orderNumber", async (req, res) => {
   try {
     const orderNumber = req.params.orderNumber;
 
     const queryUrl = `${AIRTABLE_URL}?filterByFormula={Numero Ordine}='${orderNumber}'`;
-    const data = await fetch(queryUrl, { headers: airtableHeaders }).then(r => r.json());
+    const data = await fetch(queryUrl, { headers: airtableHeaders }).then((r) =>
+      r.json()
+    );
 
     if (!data.records.length) {
       return res.json({ ok: false, error: "Ordine non trovato" });
     }
 
-    const updates = data.records.map(rec => ({
+    const updates = data.records.map((rec) => ({
       id: rec.id,
-      fields: { "Order Status": "verified" }
+      fields: { "Order Status": "verified" },
     }));
 
     await fetch(AIRTABLE_URL, {
       method: "PATCH",
       headers: airtableHeaders,
-      body: JSON.stringify({ records: updates })
+      body: JSON.stringify({ records: updates }),
     });
 
     res.json({ ok: true });
-
   } catch (err) {
     console.error("❌ Errore verify-order-mark:", err);
     res.json({ ok: false });
